@@ -64,3 +64,6 @@ node_modules/
 
 # dotenv environment variables file
 .env
+
+# Firebase admin SDK
+thelivitapp-firebase-adminsdk-wy62v-0e5de686ba.json
