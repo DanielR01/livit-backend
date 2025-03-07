@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "target": "es2018",
+    "module": "commonjs",
+    "outDir": "lib",
+    "sourceMap": true,
+    "strict": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true
+  },
+  "include": [
+    "scripts/**/*"
+  ]
+} 

@@ -1,0 +1,36 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Constants for file limits
+    function isValidFileSize(size, type) {
+      let maxVideoSize = 30 * 1024 * 1024;  
+      let maxImageSize = 5 * 1024 * 1024;   
+      return request.resource.contentType.matches('video/.*') ? size <= maxVideoSize : size <= maxImageSize;
+    }
+
+    function isValidContentType(contentType) {
+      let validImageTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg'];
+      let validVideoTypes = ['video/mp4', 'video/mov', 'video/avi', 'video/mkv'];
+      return (contentType in validImageTypes) || (contentType in validVideoTypes);
+    }
+
+    function ownsLocation(locationId) {
+      return request.auth != null &&
+        request.auth.uid == firestore.get(/databases/(default)/documents/locations/$(locationId)).data.userId;
+    }
+
+    match /locations/{locationId}/{allPaths=**} {
+      allow read: if request.auth != null;      
+      
+      allow delete: if ownsLocation(locationId);
+      
+      allow create: if 
+        request.auth != null &&
+        ownsLocation(locationId) &&
+        isValidFileSize(request.resource.size, request.resource.contentType) &&
+        isValidContentType(request.resource.contentType);
+      
+      allow update: if false;
+    }
+  }
+}

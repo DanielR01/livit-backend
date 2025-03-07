@@ -1,5 +1,6 @@
 // Define error codes as an enum for type safety
 export enum ErrorCode {
+  UNKNOWN_ERROR = 'UNKNOWN_ERROR',
   USERNAME_TAKEN = 'username-taken',
   USER_EXISTS = 'user-exists',
   MISSING_PARAMS = 'missing-params',

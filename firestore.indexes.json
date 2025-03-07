@@ -1,5 +1,33 @@
 {
   "indexes": [
+    {
+      "collectionGroup": "tickets",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "locationId", "order": "ASCENDING"},
+        {"fieldPath": "promoterId", "order": "ASCENDING"},
+        {"fieldPath": "purchasedAt", "order": "ASCENDING"},
+        {"fieldPath": "__name__", "order": "ASCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "specialSchedules",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "overriddenRegularSlot.endDateTime",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "overriddenRegularSlot.startDateTime",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "ASCENDING"
+        }
+      ]
+    }
   ],
   "fieldOverrides": []
 }
