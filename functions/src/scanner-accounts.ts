@@ -125,7 +125,7 @@ export const createScanner = functions.https.onCall({secrets: [gmailPassword, na
       if (name && attempts === 0) {
         try {
           // Format name for email (lowercase, remove spaces, limit length)
-          const formattedName = name.toLowerCase().replace(/[^a-z0-9]/g, '').substring(0, 20);
+          const formattedName = promoterDoc.data()?.name.toLowerCase().replace(/[^a-z0-9]/g, '').substring(0,10) + '-' + name.toLowerCase().replace(/[^a-z0-9]/g, '').substring(0, 20);
           if (formattedName.length >= 3) { // Only use name if it's at least 3 chars after formatting
             email = `${formattedName}@scanners.${projectId}.com`;
             scannerId = uuid();
@@ -159,7 +159,7 @@ export const createScanner = functions.https.onCall({secrets: [gmailPassword, na
       while (!user && attempts < maxAttempts) {
         attempts++;
         try {
-          // Generate unique credentials
+      // Generate unique credentials
           scannerUuid = uuid().replace(/-/g, '').substring(0, 4 + 2 * attempts);
           scannerId = promoterDoc.data()?.name.toLowerCase().replace(/ /g, '-').substring(0,10) + '-' + scannerUuid;
           email = `${scannerId}@scanners.${projectId}.com`;
@@ -168,11 +168,11 @@ export const createScanner = functions.https.onCall({secrets: [gmailPassword, na
           // Try to create user with generated ID
           user = await admin.auth().createUser({
             uid: scannerId,
-            email,
+        email,
             password: generatePassword(12),
-            emailVerified: true,
-            disabled: false,
-          });
+        emailVerified: true,
+        disabled: false,
+      });
           console.log(`[createScanner] Success on attempt ${attempts}: Firebase Auth user created with ID: ${user.uid}`);
         } catch (error: any) {
           if (error.code === 'auth/uid-already-exists' || error.code === 'auth/email-already-exists') {
@@ -214,7 +214,8 @@ export const createScanner = functions.https.onCall({secrets: [gmailPassword, na
         eventIds: eventIds || [],
         promoterId: promoterId,
         credentialsSent: false,
-        name: scannerName
+        name: scannerName,
+        email: email
       });
       console.log("[createScanner] Scanner metadata stored successfully");
 
@@ -288,14 +289,6 @@ export const createScanner = functions.https.onCall({secrets: [gmailPassword, na
     }
   }
 );
-
-function validateUser(request: any) {
-  if (!request.auth) {
-    throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
-  } else if (request.auth.token.email_verified === false) {
-    throw new functions.https.HttpsError('unauthenticated', 'User email not verified');
-  }
-}
 
 function validateEmailConfig() {
   const useGmailb = useGmail === 'true';
@@ -456,6 +449,41 @@ async function verifyScannerValidity(
         'One or more events do not exist or belong to another promoter'
       );
     }
+  }
+}
+
+export const deleteScanner = functions.https.onCall(
+  async (request) => {
+    const { scannerId } = request.data;
+    try {
+      validateUser(request);
+      if (!scannerId) {
+        throw new functions.https.HttpsError('invalid-argument', 'Scanner ID is required');
+      }
+      const scannerDoc = await db.doc(`scanners/${scannerId}`).get();
+      if (!scannerDoc.exists) {
+        throw new functions.https.HttpsError('not-found', 'Scanner not found');
+      }
+      const promoterId = scannerDoc.data()?.promoterId;
+      if (promoterId !== request.auth?.uid) {
+        throw new functions.https.HttpsError('permission-denied', 'Not authorized to delete this scanner');
+      }
+      await admin.auth().deleteUser(scannerId);
+      await db.doc(`scanners/${scannerId}`).delete();
+
+      return { success: true };
+    } catch (error) {
+      handleError('Deleting scanner account with id: ' + scannerId, error);
+      return { success: false, error: 'Error handled and thrown' };
+    }
+  }
+);
+
+function validateUser(request: any) {
+  if (!request.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
+  } else if (request.auth.token.email_verified === false) {
+    throw new functions.https.HttpsError('unauthenticated', 'User email not verified');
   }
 }
 

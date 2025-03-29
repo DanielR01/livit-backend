@@ -143,9 +143,20 @@ service cloud.firestore {
     }
 
     match /events/{eventId} {
+
+      function ownsEvent(eventId) {
+        return request.auth != null &&
+          request.auth.uid in get(/databases/$(database)/documents/events/$(eventId)).data.promoterIds ;
+      }
+
+      function isValidEventUpdate() {
+        let affectedKeys = request.resource.data.diff(resource.data).affectedKeys();
+        return affectedKeys.hasOnly(['title', 'description', 'media']);
+      }
+
       allow create: if false;
-      allow update: if false;
-      allow delete: if false;
+      allow update: if request.auth != null && ownsEvent(eventId) && isValidEventUpdate();
+      allow delete: if request.auth != null && ownsEvent(eventId);
       allow read: if request.auth != null;
 
       match /sales/{saleId} {
