@@ -1,7 +1,15 @@
 import * as functions from "firebase-functions";
 import admin from '../firebase-admin';
 import { ErrorCode } from "../errors";
-import { EventDate, EventLocation, EventTicket, EventData, EventDateTimeSlot, EventDataDeserialized, serializeEventData } from "./event_interface";
+import {
+  EventDate,
+  EventLocation,
+  EventTicket,
+  EventData,
+  EventDateTimeSlot,
+  EventDataDeserialized,
+  serializeEventData
+} from "./event_interface";
 import { debugLog, debugError } from "../utils/debug";
 
 const db = admin.firestore();
@@ -85,6 +93,7 @@ function validateFullEventData(eventData: EventData): {isValid: boolean, error?:
   
   // Validate tickets
   for (const ticket of eventData.tickets) {
+
     if (!ticket.name || ticket.name.trim() === '') {
       return { isValid: false, error: 'Ticket name is required' };
     }
@@ -122,7 +131,12 @@ function validateFullEventData(eventData: EventData): {isValid: boolean, error?:
     })) {
       return { isValid: false, error: 'Ticket valid time must start and end before start and end of date respectively' };
     }
+
+    if (eventData.tickets.filter((t: EventTicket) => t.name === ticket.name).length > 1) {
+      return { isValid: false, error: 'Ticket name must be unique' };
+    }
   }
+  
 
   for (const location of eventData.locations) {
     if (!location.locationId) {
@@ -174,17 +188,18 @@ export const createEvent = functions.https.onCall(async (request: functions.http
 
     // Extract and deserialize event data
     const deserializedEventData: EventDataDeserialized = request.data;
-    debugLog(DEBUG_CONTEXT, 'Received event data', { 
+
+    debugLog(DEBUG_CONTEXT, 'Received raw event data', { 
       name: deserializedEventData.name,
       dateCount: deserializedEventData.dates?.length,
       locationCount: deserializedEventData.locations?.length,
       ticketCount: deserializedEventData.tickets?.length
     });
     
-    // Log a sample date for debugging timestamp format
+    // Log a sample date for debugging timestamp format (using deserialized data)
     if (deserializedEventData.dates && deserializedEventData.dates.length > 0) {
       const sampleDate = deserializedEventData.dates[0];
-      debugLog(DEBUG_CONTEXT, 'Sample date before serialization', {
+      debugLog(DEBUG_CONTEXT, 'Sample raw date before serialization', {
         name: sampleDate.name,
         startTime: sampleDate.startTime,
         endTime: sampleDate.endTime
@@ -198,20 +213,21 @@ export const createEvent = functions.https.onCall(async (request: functions.http
       eventData = serializeEventData(deserializedEventData);
       debugLog(DEBUG_CONTEXT, 'Event data serialized successfully');
       
-      // Log a sample date for debugging timestamp conversion
+      // Log a sample date for debugging timestamp format (using serialized data)
       if (eventData.dates && eventData.dates.length > 0) {
         const sampleDate = eventData.dates[0];
         debugLog(DEBUG_CONTEXT, 'Sample date after serialization', {
           name: sampleDate.name,
-          startTime: sampleDate.startTime.toDate().toISOString(),
-          endTime: sampleDate.endTime.toDate().toISOString(),
-          startTimeMillis: sampleDate.startTime.toMillis(),
-          endTimeMillis: sampleDate.endTime.toMillis()
+          startTime: sampleDate.startTime,
+          endTime: sampleDate.endTime
         });
       }
     } catch (error) {
-      debugError(DEBUG_CONTEXT, 'Failed to serialize event data', error);
-      throw new functions.https.HttpsError('invalid-argument', 'Invalid timestamp format in event data');
+      debugError(DEBUG_CONTEXT, 'Error during event data serialization', { error, data: deserializedEventData });
+      if (error instanceof Error) {
+        throw new functions.https.HttpsError('invalid-argument', `Invalid data format: ${error.message}`);
+      }
+      throw new functions.https.HttpsError('invalid-argument', 'Invalid format in event data');
     }
     
     // Perform initial validation
@@ -262,7 +278,7 @@ export const createEvent = functions.https.onCall(async (request: functions.http
 
     if (eventData.promoterIds.length !== 1 || !promoterIdMatch) {
       debugError(DEBUG_CONTEXT, 'Promoter IDs mismatch', { 
-        providedIds: eventData.promoterIds, 
+        providedIds: eventData.promoterIds,
         actualId: userData.id 
       });
       throw new functions.https.HttpsError('permission-denied', ErrorCode.PERMISSION_DENIED);
@@ -272,7 +288,7 @@ export const createEvent = functions.https.onCall(async (request: functions.http
 
     // Check if the provided locations exist and belong to the promoter
     const locationIds = eventData.locations.map((location: EventLocation) => location.locationId);
-    const uniqueLocationIds = [...new Set(locationIds)].filter(id => id !== undefined) as string[];
+    const uniqueLocationIds = [...new Set(locationIds)].filter(id => id !== undefined && id !== null) as string[];
     
     debugLog(DEBUG_CONTEXT, 'Validating locations', { uniqueLocationIds });
     if (uniqueLocationIds.length > 0) {
@@ -330,13 +346,14 @@ export const createEvent = functions.https.onCall(async (request: functions.http
       startTime: eventStartTime.toDate().toISOString(),
       endTime: eventEndTime.toDate().toISOString()
     });
-    
+
     const eventDataToStore = {
       name,
       description: description || null,
       dates: dates || [],
       locations: locations || [],
       locationIds: uniqueLocationIds || [],
+      artists: [],
       tickets: tickets || [],
       promoterIds: promoterIds || [],
       createdAt: admin.firestore.FieldValue.serverTimestamp(),

@@ -38,3 +38,4 @@ export * from './media_upload/validate_media_upload';
 export * from './scanner-accounts';
 export * from './create-location';
 export * from './events/create_event';
+export * from './tickets/ticket_reservation';
